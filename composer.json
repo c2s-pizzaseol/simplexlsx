@@ -4,6 +4,7 @@
   "keywords": ["php", "excel", "xlsx", "parser", "backend"],
   "homepage": "https://github.com/rhgkstjf/simplexlsx",
   "license": "MIT",
+  "version": "dev-master",
   "authors": [
     {
       "name": "Sergey Shuchkin (SMSPILOT)",
