@@ -671,7 +671,33 @@ class SimpleXLSX {
 			}
 		}
 
-		return $rows;
+		return true;
+	}
+	public function rowGenerator( $worksheetIndex = 0, $limit = 0) {
+
+		if ( ( $ws = $this->worksheet( $worksheetIndex ) ) === false ) {
+			return false;
+		}
+
+		$newRow = array();
+
+		foreach ( $ws->sheetData->row as $row ) {
+
+			foreach ( $row->c as $c ) {
+				$newRow[] = $this->value($c);
+			}
+
+			yield $newRow;
+
+			$limit--;
+			if ( $limit === 0 ) {
+				break;
+			}
+
+			$newRow = [];
+		}
+
+		return true;
 	}
 	// https://github.com/shuchkin/simplexlsx#gets-extend-cell-info-by--rowsex
 	public function rowsEx( $worksheetIndex = 0, $limit = 0 ) {
