@@ -671,7 +671,7 @@ class SimpleXLSX {
 			}
 		}
 
-		return true;
+		return $rows;
 	}
 	public function rowGenerator( $worksheetIndex = 0, $limit = 0) {
 
