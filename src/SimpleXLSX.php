@@ -685,14 +685,15 @@ class SimpleXLSX {
 							continue;
 						}
 						$sheetRow = explode("</t>", $matched[0]);
-
-						if (count($sheetRow) !== 26) {
-							$exceptionRow = explode('<is>', $sheetRow[11]);
-							$sheetRow = array_merge(
-								array_slice($sheetRow, 0, 11),
-								$exceptionRow,
-								array_slice($sheetRow, 12, 13)
-							);
+						$filteredSheetRow = [];
+						foreach($sheetRow as $row) {
+							if (strpos($row, '<v>')) {
+								[$vTagRow, $tTagRow] = explode('<is>', $row);
+								$filteredSheetRow[] = $vTagRow;
+								$filteredSheetRow[] = $tTagRow;
+							} else {
+								$filteredSheetRow[] = $row;
+							}
 						}
 
 						$data = array_map(function ($row) {
@@ -706,7 +707,7 @@ class SimpleXLSX {
 								}
 							}
 							return $filteredRow[1];
-						}, array_slice($sheetRow, 0, count($sheetRow) - 1));
+						}, array_slice($filteredSheetRow, 0, count($filteredSheetRow) - 1));
 
 						$matched = [];
 
