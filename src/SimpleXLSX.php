@@ -203,11 +203,11 @@ class SimpleXLSX {
 		return self::parse( $data, true, $debug );
 	}
 
-	public static function parse( $filename, $is_data = false, $debug = false ) {
+	public static function parse( $filename, $is_data = false, $debug = false , $generateMode = false ) {
 		$xlsx        = new self();
 		$xlsx->debug = $debug;
 		if ( $xlsx->_unzip( $filename, $is_data ) ) {
-			$xlsx->_parse();
+			$xlsx->_parse( $generateMode );
 		}
 		if ( $xlsx->success() ) {
 			return $xlsx;
@@ -419,7 +419,7 @@ class SimpleXLSX {
 		return $this->errno;
 	}
 
-	protected function _parse() {
+	protected function _parse( $generatorMode = false) {
 		// Document data holders
 		$this->sharedstrings = array();
 		$this->sheets        = array();
@@ -462,9 +462,9 @@ class SimpleXLSX {
 
 							if ( $wrel_type === 'worksheet' ) { // Sheets
 
-								if ( $sheet = $this->getEntryXML( $wrel_path ) ) {
+								if ( $sheet = $this->getEntryXML( $wrel_path , $generatorMode) ) {
 									$index                  = array_search( (string) $workbookRelation['Id'], $index_rId, true );
-									$this->sheets[ $index ] = $sheet;
+									$this->sheets[ $index ] = is_bool($sheet) ? $wrel_path : $sheet;
 									$this->sheetFiles[ $index ] = $wrel_path;
 								}
 
@@ -536,8 +536,12 @@ class SimpleXLSX {
 	 * @param string $name Filename in archive
 	 * @return SimpleXMLElement|bool
 	*/
-	public function getEntryXML( $name ) {
+	public function getEntryXML($name , $generatorMode = false) {
 		if ( $entry_xml = $this->getEntryData( $name ) ) {
+
+			if ( $generatorMode === true) {
+				return true;
+			}
 
 			// dirty remove namespace prefixes and empty rows
 			$entry_xml = preg_replace( '/xmlns[^=]*="[^"]*"/i', '', $entry_xml ); // remove namespaces
@@ -620,6 +624,107 @@ class SimpleXLSX {
 		return ! $this->error;
 	}
 
+	public function EntryDataGenerator( $name ) {
+		$name = ltrim( str_replace( '\\', '/', $name ), '/' );
+		$dir  = $this->_strtoupper( dirname( $name ) );
+		$name = $this->_strtoupper( basename( $name ) );
+		foreach ( $this->package['entries'] as $entry ) {
+			if ( $this->_strtoupper( $entry['path'] ) === $dir && $this->_strtoupper( $entry['name'] ) === $name ) {
+				yield $entry['data'];
+			}
+		}
+
+		return true;
+	}
+	public function EntryXMLParsingGenerator($name ) {
+
+		foreach ( $this->EntryDataGenerator( $name ) as $entry_xml ) {
+
+			if ($entry_xml) {
+				$entry_xml = preg_replace('/xmlns[^=]*="[^"]*"/i', '', $entry_xml);
+				$entry_xml .= ' ';
+				$entry_xml = preg_replace('/[a-zA-Z0-9]+:([a-zA-Z0-9]+="[^"]+")/', '$1', $entry_xml);
+				$entry_xml .= ' ';
+				$entry_xml = preg_replace('/<[a-zA-Z0-9]+:([^>]+)>/', '<$1>', $entry_xml);
+				$entry_xml .= ' ';
+				$entry_xml = preg_replace('/<\/[a-zA-Z0-9]+:([^>]+)>/', '</$1>', $entry_xml);
+				$entry_xml .= ' ';
+
+				if (strpos($name, '/sheet')) {
+
+					$entry_xml = preg_replace('/<row[^>]+>\s*(<c[^\/]+\/>\s*)+<\/row>/', '', $entry_xml, -1, $cnt);
+					$entry_xml .= ' ';
+
+					$entry_xml = preg_replace('/<row[^\/>]*\/>/', '', $entry_xml, -1, $cnt2);
+					$entry_xml .= ' ';
+
+					$entry_xml = preg_replace('/<row[^>]*><\/row>/', '', $entry_xml, -1, $cnt3);
+					$entry_xml .= ' ';
+					if ($cnt || $cnt2 || $cnt3) {
+						$entry_xml = preg_replace('/<dimension[^\/]+\/>/', '', $entry_xml);
+						$entry_xml .= ' ';
+					}
+				}
+				$entry_xml = trim($entry_xml);
+				if (LIBXML_VERSION < 20900 && function_exists('libxml_disable_entity_loader')) {
+					$_old = libxml_disable_entity_loader();
+				}
+				$entry_xml_rows = explode('</row>', $entry_xml);
+
+				if (LIBXML_VERSION < 20900 && function_exists('libxml_disable_entity_loader')) {
+					/** @noinspection PhpUndefinedVariableInspection */
+					libxml_disable_entity_loader($_old);
+				}
+
+				$preg_match_filter = '/<t>(.*)<\\/t>/';
+				if ($entry_xml_rows) {
+					foreach($entry_xml_rows as $xml_row) {
+						$xml_row .= '</row>';
+						preg_match($preg_match_filter, $xml_row, $matched);
+						if (empty($matched)) {
+							continue;
+						}
+						$sheetRow = explode("</t>", $matched[0]);
+
+						if (count($sheetRow) !== 26) {
+							$exceptionRow = explode('<is>', $sheetRow[11]);
+							$sheetRow = array_merge(
+								array_slice($sheetRow, 0, 11),
+								$exceptionRow,
+								array_slice($sheetRow, 12, 13)
+							);
+						}
+
+						$data = array_map(function ($row) {
+							$filteredRow = explode("<t>", $row);
+							if (!isset($filteredRow[1])) {
+								if (strpos($row, "<v>")) {
+									$vTagRow = explode("</v>", $row)[0];
+									$filteredRow = explode("<v>", $vTagRow);
+								} else {
+									$filteredRow = explode("<t space=\"preserve\">", $row);
+								}
+							}
+							return $filteredRow[1];
+						}, array_slice($sheetRow, 0, count($sheetRow) - 1));
+
+						$matched = [];
+
+						yield $data;
+					}
+				}
+				$e = libxml_get_last_error();
+				if ($e) {
+					$this->error(3, 'XML-entry ' . $name . ' parser error ' . $e->message . ' line ' . $e->line);
+				}
+			} else {
+				$this->error(4, 'XML-entry not found ' . $name);
+				return false;
+			}
+		}
+		return true;
+	}
+
 	public function rows( $worksheetIndex = 0, $limit = 0 ) {
 
 		if ( ( $ws = $this->worksheet( $worksheetIndex ) ) === false ) {
@@ -675,26 +780,17 @@ class SimpleXLSX {
 	}
 	public function rowGenerator( $worksheetIndex = 0, $limit = 0) {
 
-		if ( ( $ws = $this->worksheet( $worksheetIndex ) ) === false ) {
+		if ( ( $name = $this->worksheet( $worksheetIndex ) ) === false ) {
 			return false;
 		}
 
-		$newRow = array();
-
-		foreach ( $ws->sheetData->row as $row ) {
-
-			foreach ( $row->c as $c ) {
-				$newRow[] = $this->value($c);
-			}
-
-			yield $newRow;
+		foreach ( ($this->EntryXMLParsingGenerator($name)) as $row ) {
+			yield $row;
 
 			$limit--;
 			if ( $limit === 0 ) {
 				break;
 			}
-
-			$newRow = [];
 		}
 
 		return true;
