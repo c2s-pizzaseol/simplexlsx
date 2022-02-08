@@ -681,12 +681,18 @@ class SimpleXLSX {
 					foreach($entry_xml_rows as $xml_row) {
 						$xml_row .= '</row>';
 						preg_match($preg_match_filter, $xml_row, $matched);
+
 						if (empty($matched)) {
 							continue;
 						}
+
 						$sheetRow = explode("</t>", $matched[0]);
 						$filteredSheetRow = [];
-						foreach($sheetRow as $row) {
+						foreach ( $sheetRow as $row ) {
+							if (empty($row)) {
+								continue;
+							}
+
 							if (strpos($row, '<v>')) {
 								[$vTagRow, $tTagRow] = explode('<is>', $row);
 								$filteredSheetRow[] = $vTagRow;
@@ -696,8 +702,9 @@ class SimpleXLSX {
 							}
 						}
 
-						$data = array_map(function ($row) {
+						$data = array_map(function ( $row ) {
 							$filteredRow = explode("<t>", $row);
+
 							if (!isset($filteredRow[1])) {
 								if (strpos($row, "<v>")) {
 									$vTagRow = explode("</v>", $row)[0];
@@ -706,8 +713,9 @@ class SimpleXLSX {
 									$filteredRow = explode("<t space=\"preserve\">", $row);
 								}
 							}
+
 							return $filteredRow[1];
-						}, array_slice($filteredSheetRow, 0, count($filteredSheetRow) - 1));
+						}, $filteredSheetRow);
 
 						$matched = [];
 
