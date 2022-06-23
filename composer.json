@@ -1,8 +1,8 @@
 {
-  "name": "rhgkstjf/simplexlsx",
+  "name": "c2s-pizzaseol/simplexlsx",
   "description": "Parse and retrieve data from Excel XLSx files. MS Excel 2007 workbooks PHP reader.",
   "keywords": ["php", "excel", "xlsx", "parser", "backend"],
-  "homepage": "https://github.com/rhgkstjf/simplexlsx",
+  "homepage": "https://github.com/c2s-pizzaseol/simplexlsx",
   "license": "MIT",
   "version": "dev-master",
   "authors": [
